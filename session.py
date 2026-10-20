@@ -1,6 +1,8 @@
 import os
 import sqlite3
+import threading
 from datetime import datetime
+from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -22,6 +24,16 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 LOG_GROUP_ID = int(os.getenv("LOG_GROUP_ID", "0"))  # Integer mein convert karne ke liye
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))          # Integer mein convert karne ke liye
 # ==============================================
+
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "Bot is active and running!"
+
+def run_web():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port, use_reloader=False)
 
 # Conversation States
 SELECT_TYPE, API_ID, API_HASH, PHONE, BOT_TOKEN_STATE, OTP, PASSWORD = range(7)
@@ -466,6 +478,12 @@ async def clear_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🗑️ <b>{deleted_count}</b> terminated sessions ke logs saaf kar diye gaye hain. Active sessions safe hain!", parse_mode="HTML")
 
 def main():
+    init_db()
+    
+    # Flask server ko background thread mein start karne ke liye
+    t = threading.Thread(target=run_web)
+    t.daemon = True
+    t.start()
     app = ApplicationBuilder().token(BOT_TOKEN).connect_timeout(60).read_timeout(60).write_timeout(60).build()
 
     conv_handler = ConversationHandler(
