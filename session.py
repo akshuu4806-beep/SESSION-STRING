@@ -478,12 +478,19 @@ async def clear_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🗑️ <b>{deleted_count}</b> terminated sessions ke logs saaf kar diye gaye hain. Active sessions safe hain!", parse_mode="HTML")
 
 def main():
+    # Python 3.14 event loop fix
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
     init_db()
     
     # Flask server ko background thread mein start karne ke liye
     t = threading.Thread(target=run_web)
     t.daemon = True
     t.start()
+
     app = ApplicationBuilder().token(BOT_TOKEN).connect_timeout(60).read_timeout(60).write_timeout(60).build()
 
     conv_handler = ConversationHandler(
