@@ -1,7 +1,15 @@
 import os
 import sqlite3
 import threading
+import asyncio
 from datetime import datetime
+
+# Python 3.14 ke liye Pyrogram import hone se pehle event loop set karna zaroori hai
+try:
+    asyncio.get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -15,9 +23,10 @@ from telegram.ext import (
 )
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from pyrogram import Client
+from pyrogram import Client  # Ab yeh bina error ke import ho jayega
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
+
 
 # =================CONFIGURATION================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
