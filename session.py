@@ -532,9 +532,9 @@ def main():
         fallbacks=[
             CallbackQueryHandler(cancel, pattern="^cancel_process$"),
             CommandHandler("cancel", cancel),
-        ],
+        ]
     )
-
+    
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("getlogs", get_logs_pdf))
     app.add_handler(CommandHandler("clearlogs", clear_logs))
