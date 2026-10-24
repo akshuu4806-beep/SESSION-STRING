@@ -76,6 +76,18 @@ def init_db():
     conn.commit()
     conn.close()
 
+async def verify_callback(update, context):
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    # Force Sub Check function call
+    if await check_force_sub(context.bot, user_id):
+        await query.answer("✅ Verified Successfully!", show_alert=True)
+        # Verify hone ke baad message update kar dein ya /start message dikhayein
+        await query.message.edit_text("🎉 **Welcome!** Aapka verification successful raha.")
+    else:
+        await query.answer("❌ Aapne abhi tak Channel/Group Join ya Request nahi kiya hai!", show_alert=True)
+        
 async def check_force_sub(bot, user_id):
     chats = [CHANNEL_ID, GROUP_ID]
     for chat_id in chats:
