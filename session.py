@@ -5,7 +5,7 @@ import asyncio
 from datetime import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
-# Python 3.14 ke liye Pyrogram import hone se pehle event loop set karna zaroori hai
+# Python 3.14 ke liye Pyrogram import hone se pehle event loop set karna zaaroori hai
 try:
     asyncio.get_event_loop()
 except RuntimeError:
@@ -83,7 +83,7 @@ async def verify_callback(update, context):
     if await check_force_sub(context.bot, user_id):
         await query.answer("✅ Verified Successfully!", show_alert=True)
         
-        # Purana Main Start Button (Generate String wala)
+        # 🟢 Yahan Generate String ka button set kiya gaya hai
         keyboard = [
             [InlineKeyboardButton("🚀 Generate String", callback_data="start_generate")]
         ]
