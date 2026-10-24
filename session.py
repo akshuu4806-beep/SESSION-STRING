@@ -312,28 +312,29 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session_type = context.user_data.get("session_type")
     api_id = context.user_data["api_id"]
     api_hash = context.user_data["api_hash"]
-    cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_process")]])
+    cancel_keyword = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_process")]])
 
     try:
         if "Telethon" in session_type:
-            # Har baar fresh client banakar connect karein
             client = TelegramClient(StringSession(), api_id, api_hash)
             await client.connect()
             sent_code = await client.send_code_request(phone)
-            context.user_data["client"] = client
+            # Session string save kar lo taaki connection drop na ho
+            context.user_data["session_string"] = client.session.save()
             context.user_data["phone_code_hash"] = sent_code.phone_code_hash
+            await client.disconnect()
         else:
             app = Client(name=f"user_{update.effective_user.id}", api_id=api_id, api_hash=api_hash, in_memory=True)
             await app.connect()
             sent_code = await app.send_code(phone)
-            context.user_data["client"] = app
             context.user_data["phone_code_hash"] = sent_code.phone_code_hash
+            await app.stop()
 
         await update.message.reply_text(
             "📌 **Step 4:** OTP sent to your Telegram account.\n\n"
             "⚠️ Send OTP with spaces (e.g., `1 2 3 4 5`).",
             parse_mode="Markdown",
-            reply_markup=cancel_keyboard,
+            reply_markup=cancel_keyword,
         )
         return OTP
 
@@ -343,31 +344,33 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     otp = update.message.text.replace(" ", "").strip()
-    client = context.user_data.get("client")
     phone = context.user_data.get("phone_or_token")
     phone_code_hash = context.user_data.get("phone_code_hash")
     session_type = context.user_data.get("session_type")
+    api_id = context.user_data["api_id"]
+    api_hash = context.user_data["api_hash"]
+    saved_session = context.user_data.get("session_string")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_process")]])
+    cancel_keyword = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_process")]])
 
-    if not client or not phone_code_hash:
-        await update.message.reply_text("❌ Session expired or client lost. Please start again with /start.")
+    if not phone_code_hash:
+        await update.message.reply_text("❌ Session expired. Please start again with /start.")
         return ConversationHandler.END
 
     try:
         if "Telethon" in session_type:
-            if not client.is_connected:
-                await client.connect()
+            client = TelegramClient(StringSession(saved_session or ""), api_id, api_hash)
+            await client.connect()
             await client.sign_in(phone=phone, code=otp, phone_code_hash=phone_code_hash)
             string_session = client.session.save()
             await client.disconnect()
         else:
-            if not client.is_connected:
-                await client.connect()
-            await client.sign_in(phone_number=phone, phone_code_hash=phone_code_hash, phone_code=otp)
-            string_session = await client.export_session_string()
-            await client.disconnect()
+            app = Client(name=f"user_{update.effective_user.id}", api_id=api_id, api_hash=api_hash, in_memory=True)
+            await app.start()
+            await app.sign_in(phone_number=phone, phone_code_hash=phone_code_hash, phone_code=otp)
+            string_session = await app.export_session_string()
+            await app.stop()
 
         await save_and_notify(update, context, session_type, phone, string_session, now)
 
@@ -381,29 +384,15 @@ async def get_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         err_str = str(e).lower()
-        
-        # 🟢 Yahan check karenge ki kya code expire ho gaya hai?
-        if "expired" in err_str or "phone_code_expired" in err_str or "code expired" in err_str:
-            if client:
-                try:
-                    await client.disconnect()
-                except:
-                    pass
-            context.user_data.clear()
-            await update.message.reply_text(
-                "❌ **OTP Expired!**\nAapka confirmation code expire ho gaya hai ya galat tha.\nKripya /start dabakar dobara koshish karein.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Restart /start", callback_data="cancel_process")]])
-            )
-            return ConversationHandler.END
-
         if "sessionpasswordneeded" in err_str or "password" in err_str or "verification" in err_str:
+            # Client ko password step ke liye save rakhenge agar 2FA hai
             await update.message.reply_text(
                 "📌 **Step 5:** **Two-Step Verification (2FA)** is enabled.\nEnter your 2FA password:",
-                reply_markup=cancel_keyboard,
+                reply_markup=cancel_keyword,
             )
             return PASSWORD
 
-        await update.message.reply_text(f"❌ Invalid OTP or Error: {e}\nEnter correct OTP:", reply_markup=cancel_keyboard)
+        await update.message.reply_text(f"❌ Invalid OTP or Error: {e}\nEnter correct OTP:", reply_markup=cancel_keyword)
         return OTP
     
 async def get_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
