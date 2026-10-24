@@ -568,8 +568,11 @@ def main():
         fallbacks=[
             CallbackQueryHandler(cancel, pattern="^cancel_process$"),
             CommandHandler("cancel", cancel),
+            # python-telegram-bot
+            (CallbackQueryHandler(verify_callback, pattern="^verify_sub$")),
         ]
     )
+    app.add_handler(CallbackQueryHandler(verify_callback, pattern="^verify_sub$"))
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("getlogs", get_logs_pdf))
