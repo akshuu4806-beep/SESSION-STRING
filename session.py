@@ -88,6 +88,12 @@ def init_db():
             chat_link TEXT
         )
     """)
+
+    # Purane wale default channels ko automatic database me daalne ke liye
+    cursor.execute("INSERT OR IGNORE INTO forced_chats (chat_id, chat_name, chat_link) VALUES (?, ?, ?)", 
+                   (CHANNEL_ID, "Official Channel", CHANNEL_LINK))
+    cursor.execute("INSERT OR IGNORE INTO forced_chats (chat_id, chat_name, chat_link) VALUES (?, ?, ?)", 
+                   (GROUP_ID, "Official Group", GROUP_LINK))
     
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS logins (
