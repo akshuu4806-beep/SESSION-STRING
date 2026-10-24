@@ -20,6 +20,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     ConversationHandler,
     ContextTypes,
+    ChatJoinRequestHandler,  
     filters,
 )
 from telethon import TelegramClient
