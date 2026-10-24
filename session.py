@@ -80,6 +80,14 @@ def init_db():
     # Default active rakho agar pehle se na ho
     cursor.execute("INSERT OR IGNORE INTO bot_settings (key, value) VALUES ('status', 'active')")
     cursor.execute("INSERT OR IGNORE INTO bot_settings (key, value) VALUES ('msg', '⚠️ Bot abhi maintenance mode me hai!')")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS forced_chats (
+            chat_id INTEGER PRIMARY KEY,
+            chat_name TEXT,
+            chat_link TEXT
+        )
+    """)
     
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS logins (
@@ -182,7 +190,7 @@ async def check_force_sub(bot, user_id):
 async def start(update, context):
     user_id = update.effective_user.id
 
-    # Check karo kya bot maintenance/off mode me hai (Owner ke alawa sabke liye)
+    # 1. Maintenance check (jo pehle banaya tha)
     if user_id != OWNER_ID:
         conn = sqlite3.connect("bot_logs.db")
         cursor = conn.cursor()
@@ -196,33 +204,36 @@ async def start(update, context):
             await update.message.reply_text(custom_msg)
             return
         conn.close()
-
-    # --- Baaki ka purana start code yahan se shuru hoga ---
-    # ...
     
-    # Check karein ki user ne join/request kiya hai ya nahi
+    # 2. Check karo kya user ne forced chats join ki hain ya nahi
     if not await check_force_sub(context.bot, user_id):
-        # Agar join nahi kiya, toh Join buttons dikhayein
-        buttons = [
-            [
-                InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK),
-                InlineKeyboardButton("👥 Join Group", url=GROUP_LINK)
-            ],
-            [
-                InlineKeyboardButton("✅ Verify", callback_data="verify_sub")
-            ]
-        ]
+        
+        # 🟢 Yahan database se chats nikal kar dynamic buttons bana rahe hain
+        conn = sqlite3.connect("bot_logs.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT chat_name, chat_link FROM forced_chats")
+        rows = cursor.fetchall()
+        conn.close()
+
+        buttons = []
+        for r in rows:
+            c_name = r[0]   # Jaise "Backup Channel"
+            c_link = r[1]   # Link
+            buttons.append([InlineKeyboardButton(f"📢 Join {c_name}", url=c_link)])
+        
+        # Sabhi channel/group ke buttons ke baad sabse niche 'Verify' button lag jayega
+        buttons.append([InlineKeyboardButton("✅ Verify", callback_data="verify_sub")])
         
         await update.message.reply_text(
             "⚠️ **Access Denied!**\n\n"
-            "Aage badhne ke liye Channel aur Group ko Join karein ya Request bhejen. "
+            "Aage badhne ke liye diye gaye sabhi Channel aur Group ko Join karein ya Request bhejen. "
             "Uske baad **Verify** button par click karein.",
             reply_markup=InlineKeyboardMarkup(buttons),
             parse_mode="Markdown"
         )
         return
 
-    # Agar user ne pehle se hi join kiya hua hai, toh seedha Generate String button dikhayein
+    # 3. Agar verified hai, toh seedha Generate String button dikhao
     keyboard = [
         [InlineKeyboardButton("🚀 Generate String", callback_data="start_generate")]
     ]
@@ -233,6 +244,85 @@ async def start(update, context):
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
+    
+
+async def add_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text("❌ You are not authorized!")
+        return
+    if len(context.args) < 3:
+        await update.message.reply_text(
+            "❌ **Usage:** `/addchat <chat_id> <Name> <invite_link>`\n"
+            "**Example:** `/addchat -1004401749842 Backup Channel https://t.me/+XEF`",
+            parse_mode="Markdown"
+        )
+        return
+    
+    try:
+        chat_id_int = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid Chat ID.")
+        return
+
+    # Pehla argument ID hai, aakhri link hai, beech ka sab kuch naam (title) hai
+    chat_link = context.args[-1]
+    chat_name = " ".join(context.args[1:-1])
+
+    conn = sqlite3.connect("bot_logs.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO forced_chats (chat_id, chat_name, chat_link) VALUES (?, ?, ?)", (chat_id_int, chat_name, chat_link))
+    conn.commit()
+    conn.close()
+
+    await update.message.reply_text(f"✅ **Forced Chat Added!**\n\n📌 **Name:** {chat_name}\n🆔 **ID:** `{chat_id_int}`\n🔗 **Link:** {chat_link}", parse_mode="Markdown")
+
+async def del_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text("❌ You are not authorized!")
+        return
+    if not context.args:
+        await update.message.reply_text("❌ **Usage:** `/delchat <chat_id>`", parse_mode="Markdown")
+        return
+    
+    try:
+        chat_id_int = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid Chat ID.")
+        return
+
+    conn = sqlite3.connect("bot_logs.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM forced_chats WHERE chat_id = ?", (chat_id_int,))
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+
+    if deleted > 0:
+        await update.message.reply_text(f"🗑️ Chat ID `{chat_id_int}` ko forced subscription list se hata diya gaya hai.", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("❌ Yeh Chat ID database me nahi mili.")
+
+async def list_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text("❌ You are not authorized!")
+        return
+
+    conn = sqlite3.connect("bot_logs.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT chat_id, chat_name, chat_link FROM forced_chats")
+    rows = cursor.fetchall()
+    conn.close()
+
+    if not rows:
+        await update.message.reply_text("📂 Abhi tak koi bhi Forced Chat add nahi hai.")
+        return
+
+    msg = "📋 **Active Forced Subscription Chats:**\n\n"
+    for r in rows:
+        msg += f"• **{r[1]}**\n  ID: `{r[0]}`\n  Link: {r[2]}\n\n"
+    
+    await update.message.reply_text(msg, parse_mode="Markdown")
+
 
 async def bot_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != OWNER_ID:
@@ -737,6 +827,9 @@ def main():
     app.add_handler(CommandHandler("clearlogs", clear_logs))
     app.add_handler(CommandHandler("off", bot_off))
     app.add_handler(CommandHandler("on", bot_on))
+    app.add_handler(CommandHandler("addchat", add_chat))
+    app.add_handler(CommandHandler("delchat", del_chat))
+    app.add_handler(CommandHandler("listchats", list_chats))
     app.add_handler(conv_handler)
 
     print("Ultimate Multi-Session Generator Bot is running...")
