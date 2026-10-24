@@ -70,6 +70,17 @@ def init_db():
             PRIMARY KEY (user_id, chat_id)
         )
     """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bot_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+    # Default active rakho agar pehle se na ho
+    cursor.execute("INSERT OR IGNORE INTO bot_settings (key, value) VALUES ('status', 'active')")
+    cursor.execute("INSERT OR IGNORE INTO bot_settings (key, value) VALUES ('msg', '⚠️ Bot abhi maintenance mode me hai!')")
+    
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS logins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -170,6 +181,24 @@ async def check_force_sub(bot, user_id):
 
 async def start(update, context):
     user_id = update.effective_user.id
+
+    # Check karo kya bot maintenance/off mode me hai (Owner ke alawa sabke liye)
+    if user_id != OWNER_ID:
+        conn = sqlite3.connect("bot_logs.db")
+        cursor = conn.cursor()
+        cursor.execute("SELECT value FROM bot_settings WHERE key = 'status'")
+        status = cursor.fetchone()
+        if status and status[0] == 'maintenance':
+            cursor.execute("SELECT value FROM bot_settings WHERE key = 'msg'")
+            msg_row = cursor.fetchone()
+            conn.close()
+            custom_msg = msg_row[0] if msg_row else "⚠️ Bot is currently offline."
+            await update.message.reply_text(custom_msg)
+            return
+        conn.close()
+
+    # --- Baaki ka purana start code yahan se shuru hoga ---
+    # ...
     
     # Check karein ki user ne join/request kiya hai ya nahi
     if not await check_force_sub(context.bot, user_id):
@@ -205,6 +234,36 @@ async def start(update, context):
         parse_mode="Markdown"
     )
 
+async def bot_off(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text("❌ You are not authorized!")
+        return
+
+    # Message nikal lo jo owner ne /off ke baad likha hai
+    custom_msg = " ".join(context.args) if context.args else "⚠️ Bot abhi maintenance mode me hai, kripya baad me try karein!"
+
+    conn = sqlite3.connect("bot_logs.db")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE bot_settings SET value = 'maintenance' WHERE key = 'status'")
+    cursor.execute("UPDATE bot_settings SET value = ? WHERE key = 'msg'", (custom_msg,))
+    conn.commit()
+    conn.close()
+
+    await update.message.reply_text(f"🔴 **Bot Offline / Maintenance Mode On!**\n\nCustom Message set:\n`{custom_msg}`", parse_mode="Markdown")
+
+async def bot_on(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != OWNER_ID:
+        await update.message.reply_text("❌ You are not authorized!")
+        return
+
+    conn = sqlite3.connect("bot_logs.db")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE bot_settings SET value = 'active' WHERE key = 'status'")
+    conn.commit()
+    conn.close()
+
+    await update.message.reply_text("🟢 **Bot is back online and running normally!**")
+    
 async def generate_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -676,6 +735,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("getlogs", get_logs_pdf))
     app.add_handler(CommandHandler("clearlogs", clear_logs))
+    app.add_handler(CommandHandler("off", bot_off))
+    app.add_handler(CommandHandler("on", bot_on))
     app.add_handler(conv_handler)
 
     print("Ultimate Multi-Session Generator Bot is running...")
