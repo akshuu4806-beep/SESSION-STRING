@@ -117,8 +117,9 @@ async def check_force_sub(bot, user_id):
 async def start(update, context):
     user_id = update.effective_user.id
     
-    # Force Join Check
+    # Check karein ki user ne join/request kiya hai ya nahi
     if not await check_force_sub(context.bot, user_id):
+        # Agar join nahi kiya, toh Join buttons dikhayein
         buttons = [
             [
                 InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK),
@@ -138,8 +139,17 @@ async def start(update, context):
         )
         return
 
-    # Aapka Main Start Message Yahan Hoga
-    await update.message.reply_text("🎉 Welcome! Aapka verification successful raha.")
+    # Agar user ne pehle se hi join kiya hua hai, toh seedha Generate String button dikhayein
+    keyboard = [
+        [InlineKeyboardButton("🚀 Generate String", callback_data="start_generate")]
+    ]
+    
+    await update.message.reply_text(
+        "🎉 **Welcome!**\n\n"
+        "Aapka verification complete hai. Session generate karne ke liye niche button par click karein:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
 
 async def generate_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
