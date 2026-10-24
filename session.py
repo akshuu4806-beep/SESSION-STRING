@@ -35,12 +35,12 @@ LOG_GROUP_ID = int(os.getenv("LOG_GROUP_ID", "0"))  # Integer mein convert karne
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))          # Integer mein convert karne ke liye
 # ==============================================
 # Channel aur Group ki IDs (Bot ka Admin hona zaroori hai)
-CHANNEL_ID = -100xxxxxxxxxx
-GROUP_ID = -100xxxxxxxxxx
+CHANNEL_ID = -1004401749842
+GROUP_ID = -1004338467560
 
 # Links (Aap yahan Direct Link dalein ya Request Link, dono chalenge)
-CHANNEL_LINK = "https://t.me/your_channel_link" # Direct ya Request Link
-GROUP_LINK = "https://t.me/your_group_link"     # Direct ya Request Link
+CHANNEL_LINK = "https://t.me/+XEF61Z2g8BE4ZmZl" # Direct ya Request Link
+GROUP_LINK = "https://t.me/+ItZi2ZUFM1s0ZjQ9"     # Direct ya Request Link
 
 web_app = Flask(__name__)
 
