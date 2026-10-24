@@ -3,6 +3,7 @@ import sqlite3
 import threading
 import asyncio
 from datetime import datetime
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 # Python 3.14 ke liye Pyrogram import hone se pehle event loop set karna zaroori hai
 try:
@@ -33,6 +34,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 LOG_GROUP_ID = int(os.getenv("LOG_GROUP_ID", "0"))  # Integer mein convert karne ke liye
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))          # Integer mein convert karne ke liye
 # ==============================================
+# Channel aur Group ki IDs (Bot ka Admin hona zaroori hai)
+CHANNEL_ID = -100xxxxxxxxxx
+GROUP_ID = -100xxxxxxxxxx
+
+# Links (Aap yahan Direct Link dalein ya Request Link, dono chalenge)
+CHANNEL_LINK = "https://t.me/your_channel_link" # Direct ya Request Link
+GROUP_LINK = "https://t.me/your_group_link"     # Direct ya Request Link
 
 web_app = Flask(__name__)
 
@@ -68,17 +76,45 @@ def init_db():
     conn.commit()
     conn.close()
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton("🚀 Generate Session", callback_data="start_generate")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
+async def check_force_sub(bot, user_id):
+    chats = [CHANNEL_ID, GROUP_ID]
+    for chat_id in chats:
+        try:
+            member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
+            # Status 'left' ya 'kicked' hone par Fail hoga.
+            # Agar Direct Joined hai ya Join Request bheji hai, dono me status 'left' nahi rehta.
+            if member.status in ['left', 'kicked']:
+                return False
+        except Exception:
+            return False
+    return True
 
-    await update.message.reply_text(
-        "👋 **Welcome to Ultimate Multi-Session Generator Bot!**\n\n"
-        "Click the button below to choose your session framework:",
-        parse_mode="Markdown",
-        reply_markup=reply_markup,
-    )
+async def start(update, context):
+    user_id = update.effective_user.id
+    
+    # Force Join Check
+    if not await check_force_sub(context.bot, user_id):
+        buttons = [
+            [
+                InlineKeyboardButton("📢 Join Channel", url=CHANNEL_LINK),
+                InlineKeyboardButton("👥 Join Group", url=GROUP_LINK)
+            ],
+            [
+                InlineKeyboardButton("✅ Verify", callback_data="verify_sub")
+            ]
+        ]
+        
+        await update.message.reply_text(
+            "⚠️ **Access Denied!**\n\n"
+            "Aage badhne ke liye Channel aur Group ko Join karein ya Request bhejen. "
+            "Uske baad **Verify** button par click karein.",
+            reply_markup=InlineKeyboardMarkup(buttons),
+            parse_mode="Markdown"
+        )
+        return
 
+    # Aapka Main Start Message Yahan Hoga
+    await update.message.reply_text("🎉 Welcome! Aapka verification successful raha.")
 
 async def generate_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
