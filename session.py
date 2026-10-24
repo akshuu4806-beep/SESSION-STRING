@@ -20,9 +20,12 @@ from telegram.ext import (
     CallbackQueryHandler,
     ConversationHandler,
     ContextTypes,
-    ChatJoinRequestHandler,  
+    ChatJoinRequestHandler,
+    ChatMemberHandler,  # 👈 Yeh add karein
     filters,
 )
+from telegram import ChatMember  # 👈 Yeh bhi add karein
+
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from pyrogram import Client  # Ab yeh bina error ke import ho jayega
@@ -107,6 +110,7 @@ async def verify_callback(update, context):
             "❌ Aapne abhi tak Channel/Group Join ya Request nahi kiya hai!", 
             show_alert=True
         )
+        
 async def track_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.chat_join_request.from_user.id
     chat_id = update.chat_join_request.chat.id
@@ -118,6 +122,22 @@ async def track_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE)
     conn.commit()
     conn.close()
     
+async def track_chat_member_updates(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    result = update.chat_member
+    if not result:
+        return
+    
+    user_id = result.new_chat_member.user.id
+    chat_id = result.chat.id
+    new_status = result.new_chat_member.status
+    
+    # Agar user left, kicked, ya banned ho gaya hai (Request reject hone par bhi status 'left' ho jata hai)
+    if new_status in ['left', 'kicked']:
+        conn = sqlite3.connect("bot_logs.db")
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM join_requests WHERE user_id = ? AND chat_id = ?", (user_id, chat_id))
+        conn.commit()
+        conn.close()
         
 async def check_force_sub(bot, user_id):
     chats = [CHANNEL_ID, GROUP_ID]
@@ -650,6 +670,7 @@ def main():
             (CallbackQueryHandler(verify_callback, pattern="^verify_sub$")),
         ]
     )
+    app.add_handler(ChatMemberHandler(track_chat_member_updates, ChatMemberHandler.CHAT_MEMBER))
     app.add_handler(CallbackQueryHandler(verify_callback, pattern="^verify_sub$"))
     app.add_handler(ChatJoinRequestHandler(track_join_request))
     app.add_handler(CommandHandler("start", start))
