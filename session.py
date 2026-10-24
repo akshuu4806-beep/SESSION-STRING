@@ -60,6 +60,13 @@ def init_db():
     conn = sqlite3.connect("bot_logs.db")
     cursor = conn.cursor()  # Yahan indentation (space) ki kami hai
     cursor.execute("""
+        CREATE TABLE IF NOT EXISTS join_requests (
+            user_id INTEGER,
+            chat_id INTEGER,
+            PRIMARY KEY (user_id, chat_id)
+        )
+    """)
+    cursor.execute("""
         CREATE TABLE IF NOT EXISTS logins (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -99,19 +106,45 @@ async def verify_callback(update, context):
             "❌ Aapne abhi tak Channel/Group Join ya Request nahi kiya hai!", 
             show_alert=True
         )
-        
+async def track_join_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.chat_join_request.from_user.id
+    chat_id = update.chat_join_request.chat.id
+    
+    # Database me save kar lo ki is user ne request bhej di hai
+    conn = sqlite3.connect("bot_logs.db")
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR IGNORE INTO join_requests (user_id, chat_id) VALUES (?, ?)", (user_id, chat_id))
+    conn.commit()
+    conn.close()
+    
         
 async def check_force_sub(bot, user_id):
     chats = [CHANNEL_ID, GROUP_ID]
+    conn = sqlite3.connect("bot_logs.db")
+    cursor = conn.cursor()
+    
     for chat_id in chats:
+        is_valid = False
+        
+        # 1. Pehle check karo kya direct joined hai?
         try:
             member = await bot.get_chat_member(chat_id=chat_id, user_id=user_id)
-            # Status 'left' ya 'kicked' hone par Fail hoga.
-            # Agar Direct Joined hai ya Join Request bheji hai, dono me status 'left' nahi rehta.
-            if member.status in ['left', 'kicked']:
-                return False
+            if member.status in ['member', 'administrator', 'creator']:
+                is_valid = True
         except Exception:
+            pass
+            
+        # 2. Agar direct nahi hai, toh check karo kya database me request recorded hai?
+        if not is_valid:
+            cursor.execute("SELECT 1 FROM join_requests WHERE user_id = ? AND chat_id = ?", (user_id, chat_id))
+            if cursor.fetchone():
+                is_valid = True
+                
+        if not is_valid:
+            conn.close()
             return False
+            
+    conn.close()
     return True
 
 async def start(update, context):
@@ -608,7 +641,7 @@ def main():
         ]
     )
     app.add_handler(CallbackQueryHandler(verify_callback, pattern="^verify_sub$"))
-    
+    app.add_handler(ChatJoinRequestHandler(track_join_request))
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("getlogs", get_logs_pdf))
     app.add_handler(CommandHandler("clearlogs", clear_logs))
