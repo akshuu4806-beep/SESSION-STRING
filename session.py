@@ -341,7 +341,6 @@ async def get_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Error: {e}\nPlease restart with /start.")
         return ConversationHandler.END
 
-
 async def get_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     otp = update.message.text.replace(" ", "").strip()
     client = context.user_data.get("client")
@@ -350,7 +349,6 @@ async def get_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session_type = context.user_data.get("session_type")
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Yeh raha cancel_keyboard variable
     cancel_keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="cancel_process")]])
 
     if not client or not phone_code_hash:
@@ -383,6 +381,21 @@ async def get_otp(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         err_str = str(e).lower()
+        
+        # 🟢 Yahan check karenge ki kya code expire ho gaya hai?
+        if "expired" in err_str or "phone_code_expired" in err_str or "code expired" in err_str:
+            if client:
+                try:
+                    await client.disconnect()
+                except:
+                    pass
+            context.user_data.clear()
+            await update.message.reply_text(
+                "❌ **OTP Expired!**\nAapka confirmation code expire ho gaya hai ya galat tha.\nKripya /start dabakar dobara koshish karein.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Restart /start", callback_data="cancel_process")]])
+            )
+            return ConversationHandler.END
+
         if "sessionpasswordneeded" in err_str or "password" in err_str or "verification" in err_str:
             await update.message.reply_text(
                 "📌 **Step 5:** **Two-Step Verification (2FA)** is enabled.\nEnter your 2FA password:",
