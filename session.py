@@ -639,7 +639,7 @@ async def get_api_hash(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return BOT_TOKEN_STATE
     else:
         await update.message.reply_text(
-            "📌 **Step 3:** Send your **Phone Number** with country code (e.g., `+919876543210`):",
+            "📌 **Step 3:** Send your **Phone Number** with country code",
             parse_mode="Markdown",
             reply_markup=cancel_keyboard,
         )
